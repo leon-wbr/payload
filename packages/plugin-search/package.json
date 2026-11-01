@@ -80,7 +80,6 @@
     "test": "echo \"Error: no tests specified\""
   },
   "dependencies": {
-    "@payloadcms/next": "workspace:*",
     "@payloadcms/ui": "workspace:*"
   },
   "devDependencies": {
