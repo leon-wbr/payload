@@ -33,8 +33,16 @@ export const handleUpsertError = ({
     error = caughtError.cause
   }
 
-  // PostgreSQL: 23505, SQLite: SQLITE_CONSTRAINT_UNIQUE
-  if (error?.code === '23505' || error?.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+  // SQLite: SQLITE_CONSTRAINT_UNIQUE. Cloudflare D1 errors have no code, only SQLite's message:
+  // "D1_ERROR: UNIQUE constraint failed: posts.slug: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_UNIQUE)"
+  const isSQLiteUniqueError =
+    error?.code === 'SQLITE_CONSTRAINT_UNIQUE' ||
+    (!error?.code &&
+      typeof error?.message === 'string' &&
+      error.message.includes('UNIQUE constraint failed:'))
+
+  // PostgreSQL: 23505
+  if (error?.code === '23505' || isSQLiteUniqueError) {
     let fieldName: null | string = null
 
     if (error.code === '23505') {
@@ -59,9 +67,10 @@ export const handleUpsertError = ({
           fieldName = match[1]
         }
       }
-    } else if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+    } else {
       // SQLite - extract from message: "UNIQUE constraint failed: table.field[, table.field2, ...]"
-      const regex = /UNIQUE constraint failed: ([^.]+)\.([^.,]+)/
+      // D1 appends ": SQLITE_CONSTRAINT ...", so the field name stops at a colon or whitespace too
+      const regex = /UNIQUE constraint failed: ([^.]+)\.([^.,:\s]+)/
       const match: string[] = error.message?.match(regex)
       if (match && match[2]) {
         if (adapter.fieldConstraints[tableName]) {
