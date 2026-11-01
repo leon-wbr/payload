@@ -4,6 +4,7 @@ import { en } from '@payloadcms/translations/languages/en'
 
 import type { RichTextSanitizer } from '../fields/config/sanitize.js'
 import type { OrderableJoinInfo } from '../fields/config/sanitizeJoinField.js'
+import type { Block } from '../fields/config/types.js'
 import type { CollectionSlug, GlobalSlug, SanitizedCollectionConfig } from '../index.js'
 import type { SanitizedJobsConfig } from '../queues/config/types/index.js'
 import type {
@@ -427,28 +428,36 @@ export const sanitizeConfig = (incomingConfig: Config): SanitizedConfig => {
   config.blocks = []
 
   if (incomingConfig.blocks?.length) {
-    for (const block of incomingConfig.blocks) {
-      const sanitizedBlock = block
+    const addedBlocks = new Set<Block>()
 
-      if (sanitizedBlock._sanitized === true) {
+    for (const block of incomingConfig.blocks) {
+      if (addedBlocks.has(block)) {
         continue
       }
-      sanitizedBlock._sanitized = true
+      addedBlocks.add(block)
 
-      sanitizedBlock.fields = sanitizedBlock.fields.concat(baseBlockFields)
+      const sanitizedBlock = block
 
-      sanitizedBlock.labels = !sanitizedBlock.labels
-        ? formatLabels(sanitizedBlock.slug)
-        : sanitizedBlock.labels
+      // Blocks are sanitized in place. When the same block objects are sanitized again, e.g. by a
+      // dev server reloading the config, they must still be added to the new config.blocks
+      if (sanitizedBlock._sanitized !== true) {
+        sanitizedBlock._sanitized = true
 
-      sanitizedBlock.fields = sanitizeFields({
-        config: config as unknown as Config,
-        existingFieldNames: new Set(),
-        fields: sanitizedBlock.fields,
-        parentIsLocalized: false,
-        richTextSanitizers,
-        validRelationships,
-      })
+        sanitizedBlock.fields = sanitizedBlock.fields.concat(baseBlockFields)
+
+        sanitizedBlock.labels = !sanitizedBlock.labels
+          ? formatLabels(sanitizedBlock.slug)
+          : sanitizedBlock.labels
+
+        sanitizedBlock.fields = sanitizeFields({
+          config: config as unknown as Config,
+          existingFieldNames: new Set(),
+          fields: sanitizedBlock.fields,
+          parentIsLocalized: false,
+          richTextSanitizers,
+          validRelationships,
+        })
+      }
 
       const flattenedSanitizedBlock = flattenBlock({ block })
 

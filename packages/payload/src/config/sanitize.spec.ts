@@ -1,3 +1,4 @@
+import type { Block } from '../fields/config/types.js'
 import type { Config } from './types.js'
 
 import { describe, expect, it } from 'vitest'
@@ -118,5 +119,34 @@ describe('sanitizeConfig', () => {
       localeCodes: [],
       locales: [],
     })
+  })
+
+  it('should keep config-level blocks when the same block objects are sanitized again', () => {
+    // A dev server that re-sanitizes the config after an edit reuses the imported block objects
+    const block: Block = {
+      slug: 'reusable',
+      fields: [{ name: 'text', type: 'text' }],
+    }
+
+    sanitizeConfig({ ...configDefaults, blocks: [block] })
+    const sanitizedConfig = sanitizeConfig({ ...configDefaults, blocks: [block] })
+
+    expect(sanitizedConfig.blocks?.map(({ slug }) => slug)).toEqual(['reusable'])
+
+    const fieldNames = sanitizedConfig.blocks![0]!.fields.map((field) =>
+      'name' in field ? field.name : undefined,
+    )
+    expect(fieldNames.filter((name) => name === 'blockName')).toHaveLength(1)
+  })
+
+  it('should add a block listed twice in config.blocks only once', () => {
+    const block: Block = {
+      slug: 'listed-twice',
+      fields: [{ name: 'text', type: 'text' }],
+    }
+
+    const sanitizedConfig = sanitizeConfig({ ...configDefaults, blocks: [block, block] })
+
+    expect(sanitizedConfig.blocks?.map(({ slug }) => slug)).toEqual(['listed-twice'])
   })
 })
