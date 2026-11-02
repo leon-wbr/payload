@@ -6,9 +6,9 @@ import { isolateObjectProperty } from './isolateObjectProperty.js'
 export type DocumentMatchingWhereExistsArgs = {
   collection: string
   /**
-   * When true, also matches documents whose value only exists in a draft version. A versioned
-   * collection keeps draft data in `_versions`, which the main-collection query — and the unique
-   * index — would miss.
+   * When true, matches documents whose value exists in their latest (draft) version or in their
+   * main row. A versioned collection keeps draft data in `_versions`, which the main-collection
+   * query would miss, while the unique index is on the main rows.
    */
   draftsEnabled?: boolean
   /** Exclude this document, so a document does not conflict with itself on update. */
@@ -34,19 +34,28 @@ export const documentMatchingWhereExists = async ({
   delete queryReq.transactionID
   const includeTrashed = Boolean(req.payload.collections[collection]?.config.trash)
 
-  const { docs } = await req.payload.find({
-    collection,
-    depth: 0,
-    disableErrors: true,
-    draft: Boolean(draftsEnabled),
-    limit: 2,
-    locale,
-    overrideAccess,
-    pagination: false,
-    req: queryReq,
-    trash: includeTrashed,
-    where,
-  })
+  // With drafts, a document's latest version and its main row can hold different values (a draft
+  // save that changed a never-published document's value), and the unique index is on the main
+  // rows, so check both.
+  for (const draft of draftsEnabled ? [true, false] : [false]) {
+    const { docs } = await req.payload.find({
+      collection,
+      depth: 0,
+      disableErrors: true,
+      draft,
+      limit: 2,
+      locale,
+      overrideAccess,
+      pagination: false,
+      req: queryReq,
+      trash: includeTrashed,
+      where,
+    })
 
-  return docs.some((doc) => doc.id !== id)
+    if (docs.some((doc) => doc.id !== id)) {
+      return true
+    }
+  }
+
+  return false
 }
